@@ -4,47 +4,20 @@ const COLORS = {
   YELLOW: "#ff0", PURPLE: "#800080"
 };
 const MENU = 0, PLAYING = 1, GAME_OVER = 2, LEADERBOARD = 3, REPLAY = 4, SETTINGS = 5;
-let gameState = MENU, aspectMode = "stretched", joyType = "joystick", btnSide = "right";
-let joySize = 18, btnSize = 12, padSize = 18;
+let gameState = MENU, aspectMode = "stretched", btnSide = "right";
+let joySize = 16, btnSize = 12;
 let player = {x:50, y:HEIGHT/2, w:40, h:40}, goal = {x:WIDTH-100, y:HEIGHT-100, w:50, h:50};
 let keyObj = randRect(30,30), door = {x:WIDTH/2-25, y:HEIGHT/2-50, w:50, h:100};
 let obstacles = Array.from({length:5},()=>randRect(60,60));
 let speed = 5, timerStarted = false, startTime = 0, endTime = 0, hasKey = false;
 let level = 1, maxLevel = 3, replayData = [], pbData = {top_10:[]}, currentReplay = null, replayFrame = 0, replayPaused = true;
 let joyActive = false, joyDX = 0, joyDY = 0, joyTouchId = null;
-let padBtns = {}, padActiveBtn = null;
-const container = document.createElement("div");
-container.id = "container";
-document.body.appendChild(container);
-const canvas = document.createElement("canvas");
-canvas.id = "game";
-container.appendChild(canvas);
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const joy = document.createElement("div");
-joy.id = "joystick";
-joy.innerHTML = '<div id="stick"></div>';
-document.body.appendChild(joy);
+const joy = document.getElementById("joystick");
 const stick = document.getElementById("stick");
-const pad = document.createElement("div");
-pad.id = "pad";
-["","","↑","","","↓","←","","→"].forEach((txt,i)=>{
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "pad-btn";
-  btn.setAttribute("tabindex","-1");
-  btn.dataset.dir = ["","","up","","","down","left","","right"][i]||"";
-  btn.textContent = txt;
-  btn.style.visibility = txt ? "" : "hidden";
-  pad.appendChild(btn);
-  if(txt) padBtns[btn.dataset.dir] = btn;
-});
-document.body.appendChild(pad);
-const escBtn = document.createElement("button");
-escBtn.id = "escBtn"; escBtn.innerText = "Menu";
-document.body.appendChild(escBtn);
-const rBtn = document.createElement("button");
-rBtn.id = "rBtn"; rBtn.innerText = "Restart";
-document.body.appendChild(rBtn);
+const escBtn = document.getElementById("escBtn");
+const rBtn = document.getElementById("rBtn");
 canvas.width = WIDTH; canvas.height = HEIGHT;
 function randRect(w,h) {
   return {x:100+Math.random()*(WIDTH-200), y:100+Math.random()*(HEIGHT-200), w, h};
@@ -112,15 +85,14 @@ function drawSettings() {
   ctx.fillStyle=COLORS.BLACK; ctx.fillRect(0,0,WIDTH,HEIGHT);
   drawText("SETTINGS", WIDTH/2, HEIGHT/4, 48, COLORS.WHITE);
   drawBtn(WIDTH/2-100, HEIGHT/2-90, 200, 50, aspectMode=="stretched"?COLORS.GREEN:COLORS.BLUE, "ASPECT: "+(aspectMode=="stretched"?"STRETCHED":"4:3"));
-  drawBtn(WIDTH/2-100, HEIGHT/2-25, 200, 50, joyType=="joystick"?COLORS.GREEN:COLORS.BLUE, "CONTROL: "+(joyType=="joystick"?"JOYSTICK":"PAD"));
-  drawBtn(WIDTH/2-100, HEIGHT/2+40, 200, 50, btnSide=="right"?COLORS.GREEN:COLORS.BLUE, "BUTTONS: "+(btnSide=="right"?"RIGHT":"LEFT"));
-  drawBtn(WIDTH/2-100, HEIGHT/2+105, 95, 50, COLORS.PURPLE, "-");
-  drawText("JSZ", WIDTH/2, HEIGHT/2+135, 20, COLORS.WHITE);
-  drawBtn(WIDTH/2+5, HEIGHT/2+105, 95, 50, COLORS.PURPLE, "+");
-  drawBtn(WIDTH/2-100, HEIGHT/2+170, 95, 50, COLORS.YELLOW, "-");
-  drawText("BTN", WIDTH/2, HEIGHT/2+200, 20, COLORS.WHITE);
-  drawBtn(WIDTH/2+5, HEIGHT/2+170, 95, 50, COLORS.YELLOW, "+");
-  drawBtn(WIDTH/2-100, HEIGHT/2+235, 200, 50, COLORS.BLUE, "BACK");
+  drawBtn(WIDTH/2-100, HEIGHT/2-25, 200, 50, btnSide=="right"?COLORS.GREEN:COLORS.BLUE, "BUTTONS: "+(btnSide=="right"?"RIGHT":"LEFT"));
+  drawBtn(WIDTH/2-100, HEIGHT/2+40, 95, 50, COLORS.PURPLE, "-");
+  drawText("JSZ", WIDTH/2, HEIGHT/2+70, 20, COLORS.WHITE);
+  drawBtn(WIDTH/2+5, HEIGHT/2+40, 95, 50, COLORS.PURPLE, "+");
+  drawBtn(WIDTH/2-100, HEIGHT/2+105, 95, 50, COLORS.YELLOW, "-");
+  drawText("BTN", WIDTH/2, HEIGHT/2+135, 20, COLORS.WHITE);
+  drawBtn(WIDTH/2+5, HEIGHT/2+105, 95, 50, COLORS.YELLOW, "+");
+  drawBtn(WIDTH/2-100, HEIGHT/2+170, 200, 50, COLORS.BLUE, "BACK");
 }
 function drawLeaderboard() {
   ctx.fillStyle=COLORS.BLACK; ctx.fillRect(0,0,WIDTH,HEIGHT);
@@ -192,13 +164,7 @@ function handleCollisions() {
 }
 function handleInput() {
   let dx=0,dy=0;
-  if (joyType=="joystick"&&joyActive) { dx=joyDX*speed; dy=joyDY*speed; }
-  if (joyType=="pad"&&padActiveBtn) {
-    if (padActiveBtn=="left") dx=-speed;
-    if (padActiveBtn=="right") dx=speed;
-    if (padActiveBtn=="up") dy=-speed;
-    if (padActiveBtn=="down") dy=speed;
-  }
+  if (joyActive) { dx=joyDX*speed; dy=joyDY*speed; }
   player.x+=dx; player.y+=dy;
   if ((dx||dy)&&!timerStarted) { timerStarted=true; startTime=Date.now()/1000; }
 }
@@ -223,7 +189,6 @@ function gameLoop() {
 function handleResize() {
   let ar = window.innerWidth/window.innerHeight;
   if (aspectMode=="4:3") {
-    document.body.classList.add("aspect-4-3");
     let targetW = window.innerWidth, targetH = window.innerHeight;
     if (ar > 4/3) {
       targetH = window.innerHeight;
@@ -234,23 +199,16 @@ function handleResize() {
     }
     canvas.style.width = targetW+"px";
     canvas.style.height = targetH+"px";
-    container.style.justifyContent = "center";
-    container.style.alignItems = "center";
   } else {
-    document.body.classList.remove("aspect-4-3");
     canvas.style.width = "100vw";
     canvas.style.height = "100vh";
-    container.style.justifyContent = "center";
-    container.style.alignItems = "center";
   }
-  let vmin = Math.min(window.innerWidth,window.innerHeight);
   joy.style.setProperty('--joy-size',`${joySize}vw`);
   joy.style.setProperty('--thumb-size',`${Math.round(joySize*0.35)}vw`);
-  pad.style.setProperty('--pad-size',`${padSize}vw`);
   escBtn.style.setProperty('--btn-width',`${btnSize}vw`);
-  escBtn.style.setProperty('--btn-height',`${btnSize*0.65}vw`);
+  escBtn.style.setProperty('--btn-height',`${btnSize*0.67}vw`);
   rBtn.style.setProperty('--btn-width',`${btnSize}vw`);
-  rBtn.style.setProperty('--btn-height',`${btnSize*0.65}vw`);
+  rBtn.style.setProperty('--btn-height',`${btnSize*0.67}vw`);
   if(btnSide=="right") {
     escBtn.style.setProperty('--btn-right',"2vw");
     escBtn.style.setProperty('--btn-left',"auto");
@@ -265,7 +223,6 @@ function handleResize() {
     document.body.classList.add("btn-left");
   }
   joy.style.setProperty('--joy-left',btnSide=="right"?"2vw":"auto");
-  pad.style.setProperty('--joy-left',btnSide=="right"?"2vw":"auto");
 }
 window.addEventListener("resize", handleResize);
 handleResize();
@@ -286,20 +243,21 @@ function handleTouchMouse(e, end) {
   let x = (e.clientX-rect.left)*WIDTH/rect.width, y = (e.clientY-rect.top)*HEIGHT/rect.height;
   handleClick(x,y);
 }
+let settingsCooldown = false;
 function handleClick(x,y) {
   if (gameState==MENU) {
     if (inRect(x,y,WIDTH/2-100,HEIGHT/2-50,200,50)) { restartGame(); }
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+20,200,50)) { gameState=LEADERBOARD; }
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+90,200,50)) { gameState=SETTINGS; }
   } else if (gameState==SETTINGS) {
-    if (inRect(x,y,WIDTH/2-100,HEIGHT/2-90,200,50)) { aspectMode = aspectMode=="stretched"?"4:3":"stretched"; handleResize(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2-25,200,50)) { joyType = joyType=="joystick"?"pad":"joystick"; updateControls(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+40,200,50)) { btnSide = btnSide=="right"?"left":"right"; handleResize(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+105,95,50)) { joySize = Math.max(10, joySize-2); padSize = Math.max(10, padSize-2); handleResize(); }
-    else if (inRect(x,y,WIDTH/2+5,HEIGHT/2+105,95,50)) { joySize = Math.min(30, joySize+2); padSize = Math.min(30, padSize+2); handleResize(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+170,95,50)) { btnSize = Math.max(8, btnSize-2); handleResize(); }
-    else if (inRect(x,y,WIDTH/2+5,HEIGHT/2+170,95,50)) { btnSize = Math.min(20, btnSize+2); handleResize(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+235,200,50)) { gameState=MENU; }
+    if(settingsCooldown) return;
+    if (inRect(x,y,WIDTH/2-100,HEIGHT/2-90,200,50)) { aspectMode = aspectMode=="stretched"?"4:3":"stretched"; handleResize(); triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2-25,200,50)) { btnSide = btnSide=="right"?"left":"right"; handleResize(); triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+40,95,50)) { joySize = Math.max(1, joySize-1); handleResize(); triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2+5,HEIGHT/2+40,95,50)) { joySize = joySize+1; handleResize(); triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+105,95,50)) { btnSize = Math.max(1, btnSize-1); handleResize(); triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2+5,HEIGHT/2+105,95,50)) { btnSize = btnSize+1; handleResize(); triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+170,200,50)) { gameState=MENU; triggerSettingsCooldown(); }
   } else if (gameState==GAME_OVER) {
     if (inRect(x,y,WIDTH/2-100,HEIGHT/2,200,50)) { gameState=MENU; }
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+70,200,50)) { gameState=LEADERBOARD; }
@@ -316,15 +274,14 @@ function handleClick(x,y) {
   }
 }
 function inRect(x,y,rx,ry,rw,rh) { return x>=rx&&x<=rx+rw&&y>=ry&&y<=ry+rh; }
-function updateControls() {
-  joy.style.display = joyType=="joystick"?"flex":"none";
-  pad.style.display = joyType=="pad"?"grid":"none";
+function triggerSettingsCooldown() {
+  settingsCooldown = true;
+  setTimeout(()=>{settingsCooldown=false;},300);
 }
 joy.addEventListener("touchstart", joyTouch, {passive:false});
 joy.addEventListener("touchmove", joyTouch, {passive:false});
 joy.addEventListener("touchend", joyEnd, {passive:false});
 function joyTouch(e) {
-  if(joyType!="joystick")return;
   let t = null;
   for (let i=0;i<e.touches.length;i++) {
     if (!joyTouchId || e.touches[i].identifier===joyTouchId) { t = e.touches[i]; joyTouchId = e.touches[i].identifier; break; }
@@ -343,75 +300,12 @@ function joyTouch(e) {
   e.preventDefault();
 }
 function joyEnd(e) {
-  if(joyType!="joystick")return;
   joyActive=false; joyDX=0; joyDY=0; joyTouchId=null;
   stick.style.left="50%"; stick.style.top="50%";
 }
-function preventSelect(e) { e.preventDefault(); }
-Object.values(padBtns).forEach(btn=>{
-  btn.addEventListener("touchstart",e=>{
-    if(joyType!="pad")return;
-    padActiveBtn=btn.dataset.dir;
-    Object.values(padBtns).forEach(b=>b.classList.toggle("pressed",b===btn));
-    e.preventDefault();
-  },{passive:false});
-  btn.addEventListener("touchenter",e=>{
-    if(joyType!="pad")return;
-    padActiveBtn=btn.dataset.dir;
-    Object.values(padBtns).forEach(b=>b.classList.toggle("pressed",b===btn));
-    e.preventDefault();
-  },{passive:false});
-  btn.addEventListener("touchmove",e=>{
-    if(joyType!="pad")return;
-    let touch=e.touches[0];
-    let found=null;
-    Object.values(padBtns).forEach(b=>{
-      let r=b.getBoundingClientRect();
-      if(touch.clientX>=r.left&&touch.clientX<=r.right&&touch.clientY>=r.top&&touch.clientY<=r.bottom)found=b;
-    });
-    if(found&&padActiveBtn!==found.dataset.dir){
-      padActiveBtn=found.dataset.dir;
-      Object.values(padBtns).forEach(b=>b.classList.toggle("pressed",b===found));
-    }
-    e.preventDefault();
-  },{passive:false});
-  btn.addEventListener("touchend",e=>{
-    if(joyType!="pad")return;
-    padActiveBtn=null;
-    Object.values(padBtns).forEach(b=>b.classList.remove("pressed"));
-    e.preventDefault();
-  },{passive:false});
-  btn.addEventListener("mousedown",e=>{
-    if(joyType!="pad")return;
-    padActiveBtn=btn.dataset.dir;
-    Object.values(padBtns).forEach(b=>b.classList.toggle("pressed",b===btn));
-    e.preventDefault();
-  });
-  btn.addEventListener("mouseenter",e=>{
-    if(e.buttons&&joyType=="pad"){
-      padActiveBtn=btn.dataset.dir;
-      Object.values(padBtns).forEach(b=>b.classList.toggle("pressed",b===btn));
-    }
-    e.preventDefault();
-  });
-  btn.addEventListener("mouseleave",e=>{
-    if(joyType!="pad")return;
-    padActiveBtn=null;
-    Object.values(padBtns).forEach(b=>b.classList.remove("pressed"));
-    e.preventDefault();
-  });
-  btn.addEventListener("mouseup",e=>{
-    if(joyType!="pad")return;
-    padActiveBtn=null;
-    Object.values(padBtns).forEach(b=>b.classList.remove("pressed"));
-    e.preventDefault();
-  });
-  btn.addEventListener("selectstart",preventSelect);
-});
-updateControls();
-escBtn.addEventListener("touchstart",()=>{ if(gameState==PLAYING)gameState=MENU; });
-escBtn.addEventListener("click",()=>{ if(gameState==PLAYING)gameState=MENU; });
-rBtn.addEventListener("touchstart",()=>{ if(gameState==PLAYING)restartGame(); });
-rBtn.addEventListener("click",()=>{ if(gameState==PLAYING)restartGame(); });
+escBtn.addEventListener("touchstart",()=>{ if(gameState==PLAYING)gameState=MENU; escBtn.classList.add("pressed"); setTimeout(()=>escBtn.classList.remove("pressed"),120); });
+escBtn.addEventListener("click",()=>{ if(gameState==PLAYING)gameState=MENU; escBtn.classList.add("pressed"); setTimeout(()=>escBtn.classList.remove("pressed"),120); });
+rBtn.addEventListener("touchstart",()=>{ if(gameState==PLAYING)restartGame(); rBtn.classList.add("pressed"); setTimeout(()=>rBtn.classList.remove("pressed"),120); });
+rBtn.addEventListener("click",()=>{ if(gameState==PLAYING)restartGame(); rBtn.classList.add("pressed"); setTimeout(()=>rBtn.classList.remove("pressed"),120); });
 loadPbData();
 requestAnimationFrame(gameLoop);

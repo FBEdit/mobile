@@ -133,10 +133,79 @@
       filter: drop-shadow(0 0 0.4vw #ffde03);
       transform: scale(1.07);
     }
+    #leaderboard-cats {
+      position: fixed;
+      left: 2vw;
+      top: 2vw;
+      z-index: 35;
+      display: flex;
+      flex-direction: column;
+      gap: 1vw;
+      pointer-events: auto;
+      max-width: 30vw;
+    }
+    .lb-cat-btn {
+      background: #161b22;
+      color: #ffde03;
+      border: 2px solid #ffde03;
+      font-size: 1.7vw;
+      font-weight: 700;
+      border-radius: 1vw;
+      margin: 0;
+      padding: 0.7vw 1.5vw;
+      box-shadow: 0 0 0.4vw #ffde03;
+      transition: background 0.07s, color 0.08s, box-shadow 0.10s;
+      cursor: pointer;
+      outline: none;
+      user-select: none;
+      touch-action: manipulation;
+      opacity: 0.95;
+      text-align: left;
+      min-width: 90px;
+    }
+    .lb-cat-btn.active, .lb-cat-btn:active {
+      background: #ffde03;
+      color: #161b22;
+      box-shadow: 0 0 0.4vw #ffde03;
+    }
+    .lb-cat-btn.info {
+      background: #222;
+      color: #fff;
+      border: 1.5px solid #444;
+      box-shadow: none;
+      font-size: 1.1vw;
+      padding: 0.3vw 1vw;
+      margin-bottom: 0.5vw;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    .lb-del-btn {
+      background: #e93e3a;
+      color: #fff;
+      border: 1.5px solid #fff;
+      border-radius: 0.7vw;
+      font-size: 1.1vw;
+      font-weight: 700;
+      margin-left: 1vw;
+      box-shadow: 0 0 0.2vw #e93e3a;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.07s, color 0.08s, box-shadow 0.10s;
+      padding: 0.3vw 0.8vw;
+      opacity: 0.87;
+    }
+    .lb-del-btn:active {
+      background: #fff;
+      color: #e93e3a;
+    }
     @media (orientation: portrait) {
       #game { width: 100vw; height: 100vw; max-height: 100vw; }
       #joystick { left: var(--joy-left, 2vw); bottom: 2vw; }
       #escBtn, #rBtn { right: var(--btn-right, 2vw); left: var(--btn-left, auto);}
+      #leaderboard-cats { left: 2vw; top: 2vw; }
+      .lb-cat-btn { min-width: 60px; font-size: 2.7vw; }
+      .lb-cat-btn.info { font-size: 1.8vw; }
+      .lb-del-btn { font-size: 2vw; }
     }
     * { -webkit-tap-highlight-color: transparent; }
     body, #joystick, #escBtn, #rBtn { touch-action: none; }
@@ -147,7 +216,7 @@
   <div id="joystick"><div id="stick"></div></div>
   <button id="escBtn">ESC</button>
   <button id="rBtn">R</button>
+  <div id="leaderboard-cats"></div>
   <script src="fb-random.js"></script>
-  <script src="game.js"></script>
 </body>
 </html>

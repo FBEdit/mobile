@@ -4,20 +4,31 @@ const COLORS = {
   YELLOW: "#ff0", PURPLE: "#800080"
 };
 const MENU = 0, PLAYING = 1, GAME_OVER = 2, LEADERBOARD = 3, REPLAY = 4, SETTINGS = 5;
-let gameState = MENU, aspectMode = "stretched", btnSide = "right";
+let gameState = MENU, aspectMode = "stretched", btnSide = "right", joystickFullSpeed = false;
 let joySize = 16, btnSize = 12;
 let player = {x:50, y:HEIGHT/2, w:40, h:40}, goal = {x:WIDTH-100, y:HEIGHT-100, w:50, h:50};
 let keyObj = randRect(30,30), door = {x:WIDTH/2-25, y:HEIGHT/2-50, w:50, h:100};
 let obstacles = Array.from({length:5},()=>randRect(60,60));
 let speed = 5, timerStarted = false, startTime = 0, endTime = 0, hasKey = false;
-let level = 1, maxLevel = 3, replayData = [], pbData = {top_10:[]}, currentReplay = null, replayFrame = 0, replayPaused = true;
+let level = 1, maxLevel = 3, replayData = [], pbData = {}, currentReplay = null, replayFrame = 0, replayPaused = true;
 let joyActive = false, joyDX = 0, joyDY = 0, joyTouchId = null;
+let leaderboardMode = "3rooms", leaderboardKeyMode = "withkey";
+let leaderboardCategories = [
+  {mode: "1room", name: "1 ROOM"},
+  {mode: "3rooms", name: "3 ROOMS"},
+  {mode: "5rooms", name: "5 ROOMS"}
+];
+let leaderboardKeyCats = [
+  {keymode:"withkey", name:"WITH KEY"},
+  {keymode:"nonkey", name:"NON KEY"}
+];
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const joy = document.getElementById("joystick");
 const stick = document.getElementById("stick");
 const escBtn = document.getElementById("escBtn");
 const rBtn = document.getElementById("rBtn");
+const catPanel = document.getElementById("leaderboard-cats");
 canvas.width = WIDTH; canvas.height = HEIGHT;
 function randRect(w,h) {
   return {x:100+Math.random()*(WIDTH-200), y:100+Math.random()*(HEIGHT-200), w, h};
@@ -48,6 +59,7 @@ function resetLevel() {
 }
 function restartGame() {
   level = 1;
+  maxLevel = leaderboardMode=="1room"?1:leaderboardMode=="5rooms"?5:3;
   resetLevel();
   player.x = 50; player.y = HEIGHT/2;
   gameState = PLAYING;
@@ -56,17 +68,43 @@ function saveRun() {
   let run_time = endTime - startTime;
   let serialized = replayData.map(frame=>({
     player:{...frame.player}, key:{...frame.key}, door:{...frame.door},
-    obstacles:frame.obstacles.map(o=>({...o})), has_key:frame.has_key
+    obstacles:frame.obstacles.map(o=>({...o})), has_key:frame.has_key, key_taken:frame.key_taken, door_opened:frame.door_opened
   }));
   let encoded = btoa(unescape(encodeURIComponent(JSON.stringify(serialized))));
-  let run_entry = {time:run_time, replay:encoded};
-  pbData.top_10.push(run_entry);
-  pbData.top_10 = pbData.top_10.sort((a,b)=>a.time-b.time).slice(0,10);
+  let run_entry = {
+    time:run_time,
+    replay:encoded,
+    mode:leaderboardMode,
+    keys:runKeyCount(serialized),
+    doors:runDoorCount(serialized)
+  };
+  let runs = pbData[leaderboardMode]||(pbData[leaderboardMode]=[]);
+  runs.push(run_entry);
+  pbData[leaderboardMode] = runs;
   localStorage.setItem("fb_pb",JSON.stringify(pbData));
 }
+function runKeyCount(frames) {
+  let count = 0, prev = false;
+  for(let f of frames) {
+    if (f.has_key && !prev) count++;
+    prev = f.has_key;
+  }
+  return count;
+}
+function runDoorCount(frames) {
+  let count = 0, prev = false;
+  for(let f of frames) {
+    let opened = f.door&&f.door.x==-100&&f.door.y==-100;
+    if (opened && !prev) count++;
+    prev = opened;
+  }
+  return count;
+}
 function loadPbData() {
+  pbData = {};
   let d = localStorage.getItem("fb_pb");
   if (d) try { pbData = JSON.parse(d); } catch {}
+  if (typeof pbData!=="object"||!pbData) pbData = {};
 }
 function startReplay(replay) {
   currentReplay = JSON.parse(decodeURIComponent(escape(atob(replay))));
@@ -81,6 +119,14 @@ function drawMenu() {
   drawBtn(WIDTH/2-100, HEIGHT/2+20, 200, 50, COLORS.BLUE, "LEADERBOARD");
   drawBtn(WIDTH/2-100, HEIGHT/2+90, 200, 50, COLORS.YELLOW, "SETTINGS");
 }
+function drawRoomSelect() {
+  ctx.fillStyle=COLORS.BLACK; ctx.fillRect(0,0,WIDTH,HEIGHT);
+  drawText("SELECT ROOMS", WIDTH/2, HEIGHT/4, 48, COLORS.WHITE);
+  drawBtn(WIDTH/2-150, HEIGHT/2-60, 120, 60, COLORS.GREEN, "1 ROOM");
+  drawBtn(WIDTH/2-60, HEIGHT/2-60, 120, 60, COLORS.YELLOW, "3 ROOMS");
+  drawBtn(WIDTH/2+30, HEIGHT/2-60, 120, 60, COLORS.PURPLE, "5 ROOMS");
+  drawBtn(WIDTH/2-100, HEIGHT/2+40, 200, 50, COLORS.BLUE, "BACK");
+}
 function drawSettings() {
   ctx.fillStyle=COLORS.BLACK; ctx.fillRect(0,0,WIDTH,HEIGHT);
   drawText("SETTINGS", WIDTH/2, HEIGHT/4, 48, COLORS.WHITE);
@@ -92,19 +138,31 @@ function drawSettings() {
   drawBtn(WIDTH/2-100, HEIGHT/2+105, 95, 50, COLORS.YELLOW, "-");
   drawText("BTN", WIDTH/2, HEIGHT/2+135, 20, COLORS.WHITE);
   drawBtn(WIDTH/2+5, HEIGHT/2+105, 95, 50, COLORS.YELLOW, "+");
-  drawBtn(WIDTH/2-100, HEIGHT/2+170, 200, 50, COLORS.BLUE, "BACK");
+  drawBtn(WIDTH/2-100, HEIGHT/2+170, 200, 50, joystickFullSpeed?COLORS.GREEN:COLORS.BLUE, "JOYSTICK FULL SPEED");
+  drawText("If ON, joystick always moves at max speed", WIDTH/2, HEIGHT/2+205, 19, "#ccc");
+  drawBtn(WIDTH/2-100, HEIGHT/2+235, 200, 50, COLORS.BLUE, "BACK");
 }
 function drawLeaderboard() {
   ctx.fillStyle=COLORS.BLACK; ctx.fillRect(0,0,WIDTH,HEIGHT);
   drawText("LEADERBOARD", WIDTH/2, 50, 40, COLORS.WHITE);
   drawBtn(50, 50, 100, 40, COLORS.RED, "BACK");
-  let y = 120;
-  for (let i=0;i<pbData.top_10.length;i++) {
-    let run = pbData.top_10[i];
-    drawText(`${i+1}. ${run.time.toFixed(2)}s`, WIDTH/2-150, y+25, 28, COLORS.WHITE, "left");
-    drawBtn(WIDTH/2+50, y, 100, 30, COLORS.PURPLE, "REPLAY");
-    y+=40;
+  let runs = (pbData[leaderboardMode]||[]).slice();
+  let y = 120, displayed = 0;
+  let keyRequired = leaderboardKeyMode=="withkey";
+  let maxRooms = leaderboardMode=="1room"?1:leaderboardMode=="5rooms"?5:3;
+  runs = runs.filter(run=>{
+    if(keyRequired) return run.keys>=maxRooms && run.doors>=maxRooms;
+    return true;
+  });
+  runs = runs.sort((a,b)=>a.time-b.time).slice(0,10);
+  for (let i=0;i<runs.length;i++) {
+    let run = runs[i];
+    drawText(`${i+1}. ${run.time.toFixed(2)}s`, WIDTH/2-180, y+25, 28, COLORS.WHITE, "left");
+    drawBtn(WIDTH/2+20, y, 85, 30, COLORS.PURPLE, "REPLAY");
+    drawBtn(WIDTH/2+110, y, 85, 30, COLORS.RED, "DELETE");
+    y+=40; displayed++;
   }
+  if(displayed==0) drawText("No runs in this category yet!", WIDTH/2, 220, 24, "#aaa");
 }
 function drawGameOver() {
   ctx.fillStyle=COLORS.BLACK; ctx.fillRect(0,0,WIDTH,HEIGHT);
@@ -140,8 +198,8 @@ function drawReplay() {
 }
 function handleCollisions() {
   for (let o of obstacles) if (collide(player,o)) { player.x=50; player.y=HEIGHT/2; }
-  if (collide(player,keyObj)) { hasKey=true; keyObj.x=-100; keyObj.y=-100; }
-  if (collide(player,door)&&hasKey) { door.x=-100; door.y=-100; }
+  if (collide(player,keyObj)) { hasKey=true; keyObj.x=-100; keyObj.y=-100; key_taken_this = true; }
+  if (collide(player,door)&&hasKey) { door.x=-100; door.y=-100; door_opened_this = true; }
   if (collide(player,goal)) {
     if (level<maxLevel) {
       level++;
@@ -164,15 +222,28 @@ function handleCollisions() {
 }
 function handleInput() {
   let dx=0,dy=0;
-  if (joyActive) { dx=joyDX*speed; dy=joyDY*speed; }
+  if (joyActive) {
+    if(joystickFullSpeed) {
+      let mag = Math.sqrt(joyDX*joyDX+joyDY*joyDY);
+      if(mag>0) {
+        dx = speed * (joyDX/mag);
+        dy = speed * (joyDY/mag);
+      }
+    } else {
+      dx=joyDX*speed; dy=joyDY*speed;
+    }
+  }
   player.x+=dx; player.y+=dy;
   if ((dx||dy)&&!timerStarted) { timerStarted=true; startTime=Date.now()/1000; }
 }
+let key_taken_this = false, door_opened_this = false;
 function recordFrame() {
   replayData.push({
     player:{...player}, key:{...keyObj}, door:{...door},
-    obstacles:obstacles.map(o=>({...o})), has_key:hasKey
+    obstacles:obstacles.map(o=>({...o})), has_key:hasKey,
+    key_taken:key_taken_this, door_opened:door_opened_this
   });
+  key_taken_this = false; door_opened_this = false;
 }
 function gameLoop() {
   ctx.clearRect(0,0,WIDTH,HEIGHT);
@@ -183,6 +254,7 @@ function gameLoop() {
   else if (gameState==GAME_OVER) drawGameOver();
   else if (gameState==LEADERBOARD) drawLeaderboard();
   else if (gameState==REPLAY) drawReplay();
+  else if (gameState=="ROOM_SELECT") drawRoomSelect();
   else if (gameState==SETTINGS) drawSettings();
   requestAnimationFrame(gameLoop);
 }
@@ -246,9 +318,14 @@ function handleTouchMouse(e, end) {
 let settingsCooldown = false;
 function handleClick(x,y) {
   if (gameState==MENU) {
-    if (inRect(x,y,WIDTH/2-100,HEIGHT/2-50,200,50)) { restartGame(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+20,200,50)) { gameState=LEADERBOARD; }
+    if (inRect(x,y,WIDTH/2-100,HEIGHT/2-50,200,50)) { gameState = "ROOM_SELECT"; }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+20,200,50)) { updateLeaderboardPanel(); gameState=LEADERBOARD; }
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+90,200,50)) { gameState=SETTINGS; }
+  } else if (gameState=="ROOM_SELECT") {
+    if(inRect(x,y,WIDTH/2-150,HEIGHT/2-60,120,60)) { leaderboardMode="1room"; maxLevel=1; gameState=PLAYING; restartGame(); }
+    else if(inRect(x,y,WIDTH/2-60,HEIGHT/2-60,120,60)) { leaderboardMode="3rooms"; maxLevel=3; gameState=PLAYING; restartGame(); }
+    else if(inRect(x,y,WIDTH/2+30,HEIGHT/2-60,120,60)) { leaderboardMode="5rooms"; maxLevel=5; gameState=PLAYING; restartGame(); }
+    else if(inRect(x,y,WIDTH/2-100,HEIGHT/2+40,200,50)) { gameState=MENU; }
   } else if (gameState==SETTINGS) {
     if(settingsCooldown) return;
     if (inRect(x,y,WIDTH/2-100,HEIGHT/2-90,200,50)) { aspectMode = aspectMode=="stretched"?"4:3":"stretched"; handleResize(); triggerSettingsCooldown(); }
@@ -257,19 +334,29 @@ function handleClick(x,y) {
     else if (inRect(x,y,WIDTH/2+5,HEIGHT/2+40,95,50)) { joySize = joySize+1; handleResize(); triggerSettingsCooldown(); }
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+105,95,50)) { btnSize = Math.max(1, btnSize-1); handleResize(); triggerSettingsCooldown(); }
     else if (inRect(x,y,WIDTH/2+5,HEIGHT/2+105,95,50)) { btnSize = btnSize+1; handleResize(); triggerSettingsCooldown(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+170,200,50)) { gameState=MENU; triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+170,200,50)) { joystickFullSpeed = !joystickFullSpeed; triggerSettingsCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+235,200,50)) { gameState=MENU; triggerSettingsCooldown(); }
   } else if (gameState==GAME_OVER) {
     if (inRect(x,y,WIDTH/2-100,HEIGHT/2,200,50)) { gameState=MENU; }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+70,200,50)) { gameState=LEADERBOARD; }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+70,200,50)) { updateLeaderboardPanel(); gameState=LEADERBOARD; }
   } else if (gameState==LEADERBOARD) {
     if (inRect(x,y,50,50,100,40)) { gameState=MENU; }
+    let runs = (pbData[leaderboardMode]||[]).slice();
     let yBtn = 120;
-    for (let i=0;i<pbData.top_10.length;i++) {
-      if (inRect(x,y,WIDTH/2+50,yBtn,100,30)) { startReplay(pbData.top_10[i].replay); }
+    let keyRequired = leaderboardKeyMode=="withkey";
+    let maxRooms = leaderboardMode=="1room"?1:leaderboardMode=="5rooms"?5:3;
+    runs = runs.filter(run=>{
+      if(keyRequired) return run.keys>=maxRooms && run.doors>=maxRooms;
+      return true;
+    });
+    runs = runs.sort((a,b)=>a.time-b.time).slice(0,10);
+    for (let i=0;i<runs.length;i++) {
+      if (inRect(x,y,WIDTH/2+20,yBtn,85,30)) { startReplay(runs[i].replay); }
+      if (inRect(x,y,WIDTH/2+110,yBtn,85,30)) { deleteRun(i,keyRequired,maxRooms); break; }
       yBtn+=40;
     }
   } else if (gameState==REPLAY) {
-    if (inRect(x,y,50,50,100,40)) { gameState=LEADERBOARD; }
+    if (inRect(x,y,50,50,100,40)) { updateLeaderboardPanel(); gameState=LEADERBOARD; }
     if (inRect(x,y,WIDTH/2-60,HEIGHT-80,120,50)) { replayPaused=!replayPaused; }
   }
 }
@@ -277,6 +364,50 @@ function inRect(x,y,rx,ry,rw,rh) { return x>=rx&&x<=rx+rw&&y>=ry&&y<=ry+rh; }
 function triggerSettingsCooldown() {
   settingsCooldown = true;
   setTimeout(()=>{settingsCooldown=false;},300);
+}
+function updateLeaderboardPanel() {
+  catPanel.innerHTML = "";
+  let info = document.createElement("button");
+  info.className = "lb-cat-btn info";
+  info.disabled = true;
+  info.textContent = "CATEGORIES";
+  catPanel.appendChild(info);
+  leaderboardCategories.forEach(cat=>{
+    let b = document.createElement("button");
+    b.className = "lb-cat-btn"+(leaderboardMode==cat.mode?" active":"");
+    b.textContent = cat.name;
+    b.onclick = ()=>{ leaderboardMode=cat.mode; updateLeaderboardPanel(); };
+    catPanel.appendChild(b);
+  });
+  let info2 = document.createElement("button");
+  info2.className = "lb-cat-btn info";
+  info2.disabled = true;
+  info2.textContent = "MODE";
+  catPanel.appendChild(info2);
+  leaderboardKeyCats.forEach(cat=>{
+    let b = document.createElement("button");
+    b.className = "lb-cat-btn"+(leaderboardKeyMode==cat.keymode?" active":"");
+    b.textContent = cat.name;
+    b.onclick = ()=>{ leaderboardKeyMode=cat.keymode; updateLeaderboardPanel(); };
+    catPanel.appendChild(b);
+  });
+}
+function deleteRun(idx,keyRequired,maxRooms) {
+  let runs = (pbData[leaderboardMode]||[]).slice();
+  let filtered = [];
+  for(let i=0,c=0;i<runs.length;i++) {
+    let run = runs[i];
+    if(keyRequired) {
+      if(run.keys>=maxRooms&&run.doors>=maxRooms) {
+        if(c==idx) {c++; continue;}
+        c++;
+      }
+    }
+    filtered.push(run);
+  }
+  pbData[leaderboardMode] = filtered;
+  localStorage.setItem("fb_pb",JSON.stringify(pbData));
+  updateLeaderboardPanel();
 }
 joy.addEventListener("touchstart", joyTouch, {passive:false});
 joy.addEventListener("touchmove", joyTouch, {passive:false});
@@ -308,4 +439,5 @@ escBtn.addEventListener("click",()=>{ if(gameState==PLAYING)gameState=MENU; escB
 rBtn.addEventListener("touchstart",()=>{ if(gameState==PLAYING)restartGame(); rBtn.classList.add("pressed"); setTimeout(()=>rBtn.classList.remove("pressed"),120); });
 rBtn.addEventListener("click",()=>{ if(gameState==PLAYING)restartGame(); rBtn.classList.add("pressed"); setTimeout(()=>rBtn.classList.remove("pressed"),120); });
 loadPbData();
+updateLeaderboardPanel();
 requestAnimationFrame(gameLoop);

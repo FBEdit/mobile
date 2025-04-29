@@ -138,11 +138,14 @@
       left: 2vw;
       top: 2vw;
       z-index: 35;
-      display: flex;
+      display: none;
       flex-direction: column;
       gap: 1vw;
       pointer-events: auto;
       max-width: 30vw;
+    }
+    #leaderboard-cats.active {
+      display: flex;
     }
     .lb-cat-btn {
       background: #161b22;
@@ -217,6 +220,6 @@
   <button id="escBtn">ESC</button>
   <button id="rBtn">R</button>
   <div id="leaderboard-cats"></div>
-  <script src="fb-random.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>

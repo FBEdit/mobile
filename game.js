@@ -22,17 +22,19 @@ let leaderboardKeyCats = [
   {keymode:"withkey", name:"WITH KEY"},
   {keymode:"nonkey", name:"NON KEY"}
 ];
+let lbCatPanel = null;
+let cooldownActive = false;
+let deleteConfirmState = {};
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const joy = document.getElementById("joystick");
 const stick = document.getElementById("stick");
 const escBtn = document.getElementById("escBtn");
 const rBtn = document.getElementById("rBtn");
-const catPanel = document.getElementById("leaderboard-cats");
-let cooldownActive = false;
-let deleteConfirmState = {};
 
 canvas.width = WIDTH; canvas.height = HEIGHT;
+
 function randRect(w,h) {
   return {x:100+Math.random()*(WIDTH-200), y:100+Math.random()*(HEIGHT-200), w, h};
 }
@@ -250,18 +252,48 @@ function recordFrame() {
   });
   key_taken_this = false; door_opened_this = false;
 }
+function showLeaderboardCategories() {
+  if (lbCatPanel) lbCatPanel.remove();
+  lbCatPanel = document.createElement("div");
+  lbCatPanel.className = "lb-cat-panel";
+  let info = document.createElement("button");
+  info.className = "lb-cat-btn info";
+  info.disabled = true;
+  info.textContent = "CATEGORIES";
+  lbCatPanel.appendChild(info);
+  leaderboardCategories.forEach(cat=>{
+    let b = document.createElement("button");
+    b.className = "lb-cat-btn"+(leaderboardMode==cat.mode?" active":"");
+    b.textContent = cat.name;
+    b.onclick = ()=>{ if(!cooldownActive){ leaderboardMode=cat.mode; showLeaderboardCategories(); triggerCooldown(); }};
+    lbCatPanel.appendChild(b);
+  });
+  let info2 = document.createElement("button");
+  info2.className = "lb-cat-btn info";
+  info2.disabled = true;
+  info2.textContent = "MODE";
+  lbCatPanel.appendChild(info2);
+  leaderboardKeyCats.forEach(cat=>{
+    let b = document.createElement("button");
+    b.className = "lb-cat-btn"+(leaderboardKeyMode==cat.keymode?" active":"");
+    b.textContent = cat.name;
+    b.onclick = ()=>{ if(!cooldownActive){ leaderboardKeyMode=cat.keymode; showLeaderboardCategories(); triggerCooldown(); }};
+    lbCatPanel.appendChild(b);
+  });
+  document.body.appendChild(lbCatPanel);
+}
+function hideLeaderboardCategories() {
+  if (lbCatPanel) { lbCatPanel.remove(); lbCatPanel = null; }
+}
 function gameLoop() {
   ctx.clearRect(0,0,WIDTH,HEIGHT);
-  if (gameState==MENU) drawMenu();
-  else if (gameState==PLAYING) {
-    handleInput(); handleCollisions(); recordFrame(); drawGame();
-  }
-  else if (gameState==GAME_OVER) drawGameOver();
-  else if (gameState==LEADERBOARD) drawLeaderboard();
-  else if (gameState==REPLAY) drawReplay();
-  else if (gameState==ROOM_SELECT) drawRoomSelect();
-  else if (gameState==SETTINGS) drawSettings();
-  catPanel.className = gameState==LEADERBOARD?"active":"";
+  if (gameState==MENU) { hideLeaderboardCategories(); drawMenu(); }
+  else if (gameState==PLAYING) { hideLeaderboardCategories(); handleInput(); handleCollisions(); recordFrame(); drawGame(); }
+  else if (gameState==GAME_OVER) { hideLeaderboardCategories(); drawGameOver(); }
+  else if (gameState==LEADERBOARD) { showLeaderboardCategories(); drawLeaderboard(); }
+  else if (gameState==REPLAY) { hideLeaderboardCategories(); drawReplay(); }
+  else if (gameState==ROOM_SELECT) { hideLeaderboardCategories(); drawRoomSelect(); }
+  else if (gameState==SETTINGS) { hideLeaderboardCategories(); drawSettings(); }
   requestAnimationFrame(gameLoop);
 }
 function handleResize() {
@@ -329,7 +361,7 @@ function handleClick(x,y) {
   if (cooldownActive) return;
   if (gameState==MENU) {
     if (inRect(x,y,WIDTH/2-100,HEIGHT/2-50,200,50)) { gameState = ROOM_SELECT; triggerCooldown(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+20,200,50)) { updateLeaderboardPanel(); gameState=LEADERBOARD; triggerCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+20,200,50)) { gameState=LEADERBOARD; triggerCooldown(); }
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+90,200,50)) { gameState=SETTINGS; triggerCooldown(); }
   } else if (gameState==ROOM_SELECT) {
     if(inRect(x,y,WIDTH/2-150,HEIGHT/2-60,120,60)) { leaderboardMode="1room"; maxLevel=1; gameState=PLAYING; restartGame(); triggerCooldown(); }
@@ -347,7 +379,7 @@ function handleClick(x,y) {
     else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+235,200,50)) { gameState=MENU; triggerCooldown(); }
   } else if (gameState==GAME_OVER) {
     if (inRect(x,y,WIDTH/2-100,HEIGHT/2,200,50)) { gameState=MENU; triggerCooldown(); }
-    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+70,200,50)) { updateLeaderboardPanel(); gameState=LEADERBOARD; triggerCooldown(); }
+    else if (inRect(x,y,WIDTH/2-100,HEIGHT/2+70,200,50)) { gameState=LEADERBOARD; triggerCooldown(); }
   } else if (gameState==LEADERBOARD) {
     if (inRect(x,y,50,50,100,40)) { gameState=MENU; triggerCooldown(); }
     let runs = (pbData[leaderboardMode]||[]).slice();
@@ -367,45 +399,18 @@ function handleClick(x,y) {
         if(!deleteConfirmState[id]) deleteConfirmState[id]=1;
         else if(deleteConfirmState[id]===1) deleteConfirmState[id]=2;
         else if(deleteConfirmState[id]===2) { deleteRun(i,keyRequired,maxRooms); deleteConfirmState[id]=0; }
+        showLeaderboardCategories();
         triggerCooldown();
         break;
       }
       yBtn+=40;
     }
   } else if (gameState==REPLAY) {
-    if (inRect(x,y,50,50,100,40)) { updateLeaderboardPanel(); gameState=LEADERBOARD; triggerCooldown(); }
+    if (inRect(x,y,50,50,100,40)) { gameState=LEADERBOARD; triggerCooldown(); }
     if (inRect(x,y,WIDTH/2-60,HEIGHT-80,120,50)) { replayPaused=!replayPaused; triggerCooldown(); }
   }
 }
 function inRect(x,y,rx,ry,rw,rh) { return x>=rx&&x<=rx+rw&&y>=ry&&y<=ry+rh; }
-function updateLeaderboardPanel() {
-  catPanel.innerHTML = "";
-  if(gameState!=LEADERBOARD) {catPanel.className="";return;}
-  let info = document.createElement("button");
-  info.className = "lb-cat-btn info";
-  info.disabled = true;
-  info.textContent = "CATEGORIES";
-  catPanel.appendChild(info);
-  leaderboardCategories.forEach(cat=>{
-    let b = document.createElement("button");
-    b.className = "lb-cat-btn"+(leaderboardMode==cat.mode?" active":"");
-    b.textContent = cat.name;
-    b.onclick = ()=>{ if(!cooldownActive){ leaderboardMode=cat.mode; updateLeaderboardPanel(); triggerCooldown(); }};
-    catPanel.appendChild(b);
-  });
-  let info2 = document.createElement("button");
-  info2.className = "lb-cat-btn info";
-  info2.disabled = true;
-  info2.textContent = "MODE";
-  catPanel.appendChild(info2);
-  leaderboardKeyCats.forEach(cat=>{
-    let b = document.createElement("button");
-    b.className = "lb-cat-btn"+(leaderboardKeyMode==cat.keymode?" active":"");
-    b.textContent = cat.name;
-    b.onclick = ()=>{ if(!cooldownActive){ leaderboardKeyMode=cat.keymode; updateLeaderboardPanel(); triggerCooldown(); }};
-    catPanel.appendChild(b);
-  });
-}
 function deleteRun(idx,keyRequired,maxRooms) {
   let runs = (pbData[leaderboardMode]||[]).slice();
   let filtered = [];
@@ -422,7 +427,7 @@ function deleteRun(idx,keyRequired,maxRooms) {
   }
   pbData[leaderboardMode] = filtered;
   localStorage.setItem("fb_pb",JSON.stringify(pbData));
-  updateLeaderboardPanel();
+  showLeaderboardCategories();
 }
 joy.addEventListener("touchstart", joyTouch, {passive:false});
 joy.addEventListener("touchmove", joyTouch, {passive:false});
@@ -453,6 +458,6 @@ escBtn.addEventListener("touchstart",()=>{ if(!cooldownActive&&gameState==PLAYIN
 escBtn.addEventListener("click",()=>{ if(!cooldownActive&&gameState==PLAYING){gameState=MENU; triggerCooldown();} escBtn.classList.add("pressed"); setTimeout(()=>escBtn.classList.remove("pressed"),120); });
 rBtn.addEventListener("touchstart",()=>{ if(!cooldownActive&&gameState==PLAYING){restartGame(); triggerCooldown();} rBtn.classList.add("pressed"); setTimeout(()=>rBtn.classList.remove("pressed"),120); });
 rBtn.addEventListener("click",()=>{ if(!cooldownActive&&gameState==PLAYING){restartGame(); triggerCooldown();} rBtn.classList.add("pressed"); setTimeout(()=>rBtn.classList.remove("pressed"),120); });
+
 loadPbData();
-updateLeaderboardPanel();
 requestAnimationFrame(gameLoop);
